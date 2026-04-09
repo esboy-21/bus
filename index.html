@@ -12,9 +12,7 @@
         .vibrant-blue { background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%); }
         .is-past { opacity: 0.3; filter: grayscale(1); }
         [v-cloak] { display: none; }
-        .bus-scroll::-webkit-scrollbar { display: none; }
-        .bus-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; display: flex; gap: 8px; }
-        .card-active { ring: 2px solid #2563eb; background: #eff6ff !important; }
+        .card-active { ring: 3px solid #2563eb; background: #eff6ff !important; }
         .animate-in { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     </style>
@@ -128,7 +126,6 @@
                 <h3 class="text-2xl font-900">Что-то не так?</h3>
                 <p class="text-xs text-slate-400 font-medium italic mt-1">Ваша отметка попадет в администрацию</p>
             </div>
-            
             <div class="space-y-3">
                 <button @click="sendToGoogleForm('Не приехал')" class="group w-full p-5 bg-red-50 hover:bg-red-100 text-red-600 rounded-[2rem] font-black flex justify-between items-center transition active:scale-95">
                     <span>Автобуса не было</span>
@@ -159,8 +156,8 @@ createApp({
         // --- ВАШИ ССЫЛКИ И НАСТРОЙКИ ---
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
         const FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSc3G_kMXuM36uxcLPuYmfPkCwlsKHjpLmhKRFtmACmSUcd8tg/viewform";
-        const ENTRY_ROUTE = "155515134";
-        const ENTRY_TIME = "1839642945";
+        const ENTRY_ROUTE = "entry.155515134"; // ID поля маршрута
+        const ENTRY_TIME = "entry.1839642945"; // ID поля времени
         const ADMIN_PASS = "admin2026";
 
         const routes = ref([
@@ -175,37 +172,32 @@ createApp({
             try {
                 const response = await fetch(SHEET_CSV_URL);
                 const csvText = await response.text();
-                const rows = csvText.split('\n').slice(1); // убираем заголовок
+                // Разделяем строки, учитывая возможные переносы внутри ячеек
+                const rows = csvText.split(/\r?\n/).slice(1); 
                 
-                const parsedRoutes = {};
+                const finalData = rows.map(row => {
+                    // Регулярное выражение для разделения CSV с учетом кавычек
+                    const columns = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                    if (columns.length < 5) return null;
+                    
+                    const clean = (val) => val ? val.replace(/^"|"$/g, '').trim() : '';
 
-                rows.forEach(row => {
-                    const columns = row.split(',');
-                    if (columns.length < 4) return;
-                    
-                    const rName = columns[0].trim();
-                    const rDir = columns[1].trim(); // "to" или "back"
-                    const rTime = columns[2].trim();
-                    
-                    if (!parsedRoutes[rName]) {
-                        parsedRoutes[rName] = { 
-                            name: rName, 
-                            toLabel: "В Чебоксары", backLabel: "В Красноармейское", 
-                            toTimes: [], backTimes: [] 
-                        };
-                    }
-                    
-                    if (rDir === 'to') parsedRoutes[rName].toTimes.push(rTime);
-                    else parsedRoutes[rName].backTimes.push(rTime);
-                });
+                    return {
+                        name: clean(columns[0]),
+                        toLabel: clean(columns[1]) || "В ЧЕБОКСАРЫ",
+                        backLabel: clean(columns[2]) || "В КРАСНОАРМЕЙСКОЕ",
+                        // Превращаем строку времени "06:20, 07:00" в массив
+                        toTimes: clean(columns[3]).split(',').map(t => t.trim()).filter(t => t),
+                        backTimes: clean(columns[4]).split(',').map(t => t.trim()).filter(t => t)
+                    };
+                }).filter(r => r !== null && r.name);
 
-                const finalData = Object.values(parsedRoutes);
                 if (finalData.length > 0) {
                     routes.value = finalData;
                     localStorage.setItem('kb_cached_sheets', JSON.stringify(finalData));
                 }
             } catch (e) {
-                console.error("Ошибка загрузки Sheets, используем кэш:", e);
+                console.error("Ошибка загрузки:", e);
                 const cached = localStorage.getItem('kb_cached_sheets');
                 if (cached) routes.value = JSON.parse(cached);
             }
@@ -233,36 +225,47 @@ createApp({
             const now = new Date();
             const curMin = now.getHours() * 60 + now.getMinutes();
             const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
+            
             return list.map(t => {
                 const [h, m] = t.split(':').map(Number);
-                return { full: t, minutes: h * 60 + m, isPast: (h * 60 + m) < curMin };
-            }).filter(b => !b.isPast);
+                const busMin = h * 60 + m;
+                return { full: t, minutes: busMin, isPast: busMin < curMin };
+            }).filter(b => !b.isPast).sort((a, b) => a.minutes - b.minutes);
         });
 
         const nextBus = computed(() => {
             if (!upcomingBuses.value.length) return null;
-            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-            return { time: upcomingBuses.value[0].full, diff: upcomingBuses.value[0].minutes - nowMin };
+            const now = new Date();
+            const nowMin = now.getHours() * 60 + now.getMinutes();
+            return { 
+                time: upcomingBuses.value[0].full, 
+                diff: upcomingBuses.value[0].minutes - nowMin 
+            };
         });
 
         const groupedSchedule = computed(() => {
             const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
             const groups = {};
             const nextTime = nextBus.value ? nextBus.value.time : null;
-            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+            const now = new Date();
+            const nowMin = now.getHours() * 60 + now.getMinutes();
             
             list.forEach(t => {
                 const h = t.split(':')[0];
                 if (!groups[h]) groups[h] = [];
                 const [h_n, m_n] = t.split(':').map(Number);
-                groups[h].push({ full: t, isPast: (h_n * 60 + m_n) < nowMin, isNext: t === nextTime });
+                groups[h].push({ 
+                    full: t, 
+                    isPast: (h_n * 60 + m_n) < nowMin, 
+                    isNext: t === nextTime 
+                });
             });
             return Object.keys(groups).sort().map(h => ({ hour: h, minutes: groups[h] }));
         });
 
         // --- МЕТОДЫ ---
         function sendToGoogleForm(type) {
-            const url = `${FORM_BASE_URL}?usp=pp_url&entry.${ENTRY_ROUTE}=${encodeURIComponent(currentRoute.value.name)}&entry.${ENTRY_TIME}=${encodeURIComponent(selectedTime.value)}`;
+            const url = `${FORM_BASE_URL}?usp=pp_url&${ENTRY_ROUTE}=${encodeURIComponent(currentRoute.value.name)}&${ENTRY_TIME}=${encodeURIComponent(selectedTime.value)}&entry.123456789=${encodeURIComponent(type)}`;
             window.open(url, '_blank');
             selectedTime.value = null;
         }
