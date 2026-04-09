@@ -12,6 +12,8 @@
         .vibrant-blue { background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%); }
         .is-past { opacity: 0.3; filter: grayscale(1); }
         [v-cloak] { display: none; }
+        .bus-scroll::-webkit-scrollbar { display: none; }
+        .bus-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; display: flex; gap: 8px; }
         .card-active { ring: 3px solid #2563eb; background: #eff6ff !important; }
         .animate-in { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -34,23 +36,26 @@
                 </button>
             </div>
 
-            <div class="bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100">
+            <a href="https://yandex.ru/pogoda/krasnoarmeyskoye-chuvashia" target="_blank" class="block bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100 active:scale-[0.98] transition">
                 <div class="flex items-center gap-3">
-                    <span class="text-2xl">☁️</span>
+                    <span class="text-2xl">{{ weather.icon }}</span>
                     <div>
                         <p class="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">с. Красноармейское</p>
-                        <p class="text-sm font-bold text-slate-700">+3°C, Облачно</p>
+                        <p class="text-sm font-bold text-slate-700">{{ weather.temp }}°C, {{ weather.desc }}</p>
                     </div>
                 </div>
-                <div class="text-right">
+                <div class="text-right border-l border-slate-100 pl-4">
                     <p class="text-[10px] font-black text-blue-600 uppercase">{{ todayDate }}</p>
                     <p class="text-lg font-900 text-slate-800">{{ liveClock }}</p>
                 </div>
-            </div>
+            </a>
         </header>
 
         <div class="space-y-1">
-            <label class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Выберите маршрут:</label>
+            <div class="flex items-center justify-between px-2">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Выберите маршрут</label>
+                <span class="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">Актуально на 2026</span>
+            </div>
             <div class="relative">
                 <select v-model="activeRouteIdx" class="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border-none outline-none ring-1 ring-slate-100 appearance-none">
                     <option v-for="(r, i) in routes" :value="i">{{ r.name }}</option>
@@ -73,6 +78,18 @@
                 </div>
             </div>
             <svg class="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" fill="currentColor" viewBox="0 0 24 24"><path d="M18 11h-3V8h3m-5 3h-3V8h3m-5 3H5V8h3m10 7H6a1 1 0 0 1-1-1v-1h14v1a1 1 0 0 1-1 1m1-9H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h1v2h2v-2h8v2h2v-2h1c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2Z"/></svg>
+        </div>
+
+        <div v-if="upcomingBuses.length > 1" class="space-y-2">
+            <p class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Следующие сегодня</p>
+            <div class="bus-scroll pb-2">
+                <div v-for="(bus, index) in upcomingBuses.slice(1)" :key="index" 
+                     @click="openAction(bus.full)"
+                     class="min-w-[110px] p-4 bg-white rounded-2xl border border-slate-100 shadow-sm active:scale-95 transition">
+                    <p class="text-lg font-black text-blue-600 leading-none mb-1">{{ bus.full }}</p>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase leading-none">через {{ bus.minutes - (new Date().getHours() * 60 + new Date().getMinutes()) }} м</p>
+                </div>
+            </div>
         </div>
 
         <div class="flex p-1.5 bg-slate-200/40 rounded-2xl">
@@ -108,32 +125,16 @@
         </footer>
     </div>
 
-    <div v-else class="p-5 space-y-6 bg-white min-h-screen">
-        <header class="flex justify-between items-center">
-            <h2 class="text-2xl font-900 uppercase">Админ-центр</h2>
-            <button @click="isAdminView = false" class="px-4 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-sm">Выйти</button>
-        </header>
-        <div class="p-8 bg-blue-50 rounded-3xl text-center space-y-3">
-             <p class="text-sm text-blue-800 font-bold">Данные загружаются из Google Таблиц автоматически.</p>
-             <p class="text-[10px] text-blue-400 uppercase">Чтобы изменить расписание, просто отредактируйте вашу таблицу.</p>
-        </div>
-    </div>
-
     <div v-if="selectedTime" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/40 backdrop-blur-sm" @click.self="selectedTime = null">
         <div class="w-full bg-white p-8 rounded-[3rem] space-y-5 shadow-2xl animate-in">
             <div class="text-center">
                 <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Рейс на {{ selectedTime }}</p>
                 <h3 class="text-2xl font-900">Что-то не так?</h3>
-                <p class="text-xs text-slate-400 font-medium italic mt-1">Ваша отметка попадет в администрацию</p>
             </div>
             <div class="space-y-3">
-                <button @click="sendToGoogleForm('Не приехал')" class="group w-full p-5 bg-red-50 hover:bg-red-100 text-red-600 rounded-[2rem] font-black flex justify-between items-center transition active:scale-95">
+                <button @click="sendToGoogleForm('Не приехал')" class="w-full p-5 bg-red-50 text-red-600 rounded-[2rem] font-black flex justify-between items-center">
                     <span>Автобуса не было</span>
-                    <span class="text-xl">⚠️</span>
-                </button>
-                <button @click="sendToGoogleForm('Изменение времени')" class="group w-full p-5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-[2rem] font-black flex justify-between items-center transition active:scale-95">
-                    <span>Другое время</span>
-                    <span class="text-xl">🕒</span>
+                    <span>⚠️</span>
                 </button>
                 <button @click="selectedTime = null" class="w-full py-2 text-slate-300 font-bold text-[10px] uppercase">Закрыть</button>
             </div>
@@ -152,61 +153,56 @@ createApp({
         const direction = ref('to');
         const selectedTime = ref(null);
         const liveClock = ref('');
+        const weather = ref({ temp: '...', desc: 'Загрузка', icon: '⏳' });
         
-        // --- ВАШИ ССЫЛКИ И НАСТРОЙКИ ---
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
-        const FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSc3G_kMXuM36uxcLPuYmfPkCwlsKHjpLmhKRFtmACmSUcd8tg/viewform";
-        const ENTRY_ROUTE = "entry.155515134"; // ID поля маршрута
-        const ENTRY_TIME = "entry.1839642945"; // ID поля времени
-        const ADMIN_PASS = "admin2026";
-
-        const routes = ref([
-            { 
-                name: "Загрузка...", toLabel: "В город", backLabel: "В село",
-                toTimes: [], backTimes: []
+        
+        // Настройки погоды для Красноармейского
+        const fetchWeather = async () => {
+            try {
+                const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=55.76&longitude=47.17&current_weather=true");
+                const data = await res.json();
+                const temp = Math.round(data.current_weather.temperature);
+                const code = data.current_weather.weathercode;
+                
+                // Простая интерпретация кодов погоды
+                let desc = "Ясно"; let icon = "☀️";
+                if (code > 0) { desc = "Облачно"; icon = "☁️"; }
+                if (code > 50) { desc = "Дождь"; icon = "🌧️"; }
+                if (code > 70) { desc = "Снег"; icon = "❄️"; }
+                
+                weather.value = { temp, desc, icon };
+            } catch (e) {
+                weather.value = { temp: '?', desc: 'Ошибка', icon: '❌' };
             }
-        ]);
+        };
 
-        // Функция загрузки данных из Google Sheets
+        const routes = ref([{ name: "Загрузка...", toLabel: "...", backLabel: "...", toTimes: [], backTimes: [] }]);
+
         const loadFromSheets = async () => {
             try {
                 const response = await fetch(SHEET_CSV_URL);
                 const csvText = await response.text();
-                // Разделяем строки, учитывая возможные переносы внутри ячеек
                 const rows = csvText.split(/\r?\n/).slice(1); 
-                
                 const finalData = rows.map(row => {
-                    // Регулярное выражение для разделения CSV с учетом кавычек
                     const columns = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                     if (columns.length < 5) return null;
-                    
                     const clean = (val) => val ? val.replace(/^"|"$/g, '').trim() : '';
-
                     return {
                         name: clean(columns[0]),
                         toLabel: clean(columns[1]) || "В ЧЕБОКСАРЫ",
                         backLabel: clean(columns[2]) || "В КРАСНОАРМЕЙСКОЕ",
-                        // Превращаем строку времени "06:20, 07:00" в массив
                         toTimes: clean(columns[3]).split(',').map(t => t.trim()).filter(t => t),
                         backTimes: clean(columns[4]).split(',').map(t => t.trim()).filter(t => t)
                     };
                 }).filter(r => r !== null && r.name);
-
-                if (finalData.length > 0) {
-                    routes.value = finalData;
-                    localStorage.setItem('kb_cached_sheets', JSON.stringify(finalData));
-                }
-            } catch (e) {
-                console.error("Ошибка загрузки:", e);
-                const cached = localStorage.getItem('kb_cached_sheets');
-                if (cached) routes.value = JSON.parse(cached);
-            }
+                if (finalData.length > 0) routes.value = finalData;
+            } catch (e) { console.error(e); }
         };
 
         const startClock = () => {
             const update = () => {
-                const now = new Date();
-                liveClock.value = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                liveClock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             };
             update();
             setInterval(update, 30000);
@@ -215,9 +211,10 @@ createApp({
         onMounted(() => {
             loadFromSheets();
             startClock();
+            fetchWeather();
+            setInterval(fetchWeather, 7200000); // Обновление погоды раз в 2 часа (7200000 мс)
         });
 
-        // --- ВЫЧИСЛЯЕМЫЕ СВОЙСТВА ---
         const currentRoute = computed(() => routes.value[activeRouteIdx.value] || routes.value[0]);
         const todayDate = computed(() => new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }));
 
@@ -225,64 +222,39 @@ createApp({
             const now = new Date();
             const curMin = now.getHours() * 60 + now.getMinutes();
             const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
-            
             return list.map(t => {
                 const [h, m] = t.split(':').map(Number);
-                const busMin = h * 60 + m;
-                return { full: t, minutes: busMin, isPast: busMin < curMin };
-            }).filter(b => !b.isPast).sort((a, b) => a.minutes - b.minutes);
+                return { full: t, minutes: h * 60 + m };
+            }).filter(b => b.minutes >= curMin).sort((a, b) => a.minutes - b.minutes);
         });
 
         const nextBus = computed(() => {
             if (!upcomingBuses.value.length) return null;
-            const now = new Date();
-            const nowMin = now.getHours() * 60 + now.getMinutes();
-            return { 
-                time: upcomingBuses.value[0].full, 
-                diff: upcomingBuses.value[0].minutes - nowMin 
-            };
+            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+            return { time: upcomingBuses.value[0].full, diff: upcomingBuses.value[0].minutes - nowMin };
         });
 
         const groupedSchedule = computed(() => {
             const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
             const groups = {};
             const nextTime = nextBus.value ? nextBus.value.time : null;
-            const now = new Date();
-            const nowMin = now.getHours() * 60 + now.getMinutes();
-            
+            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
             list.forEach(t => {
                 const h = t.split(':')[0];
                 if (!groups[h]) groups[h] = [];
                 const [h_n, m_n] = t.split(':').map(Number);
-                groups[h].push({ 
-                    full: t, 
-                    isPast: (h_n * 60 + m_n) < nowMin, 
-                    isNext: t === nextTime 
-                });
+                groups[h].push({ full: t, isPast: (h_n * 60 + m_n) < nowMin, isNext: t === nextTime });
             });
             return Object.keys(groups).sort().map(h => ({ hour: h, minutes: groups[h] }));
         });
 
-        // --- МЕТОДЫ ---
-        function sendToGoogleForm(type) {
-            const url = `${FORM_BASE_URL}?usp=pp_url&${ENTRY_ROUTE}=${encodeURIComponent(currentRoute.value.name)}&${ENTRY_TIME}=${encodeURIComponent(selectedTime.value)}&entry.123456789=${encodeURIComponent(type)}`;
-            window.open(url, '_blank');
-            selectedTime.value = null;
-        }
-
-        function loginAdmin() {
-            const pass = prompt("Доступ только для администрации:");
-            if (pass === ADMIN_PASS) isAdminView.value = true;
-            else if (pass) alert("Доступ запрещен");
-        }
-
         function openAction(t) { selectedTime.value = t; }
-        function contactAdmin() { window.open('https://t.me/your_admin_username', '_blank'); }
+        function loginAdmin() { const pass = prompt("Пароль:"); if (pass === "admin2026") isAdminView.value = true; }
 
         return { 
             isAdminView, activeRouteIdx, direction, routes, currentRoute, todayDate, liveClock,
-            upcomingBuses, nextBus, groupedSchedule, selectedTime, 
-            openAction, sendToGoogleForm, contactAdmin, loginAdmin
+            upcomingBuses, nextBus, groupedSchedule, selectedTime, weather,
+            openAction, loginAdmin
         };
     }
 }).mount('#app');
