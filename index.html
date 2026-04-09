@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>КрасноBus — Транспорт Чувашии</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
+        .vibrant-blue { background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%); }
+        .is-past { opacity: 0.3; filter: grayscale(1); }
+        [v-cloak] { display: none; }
+        .bus-scroll::-webkit-scrollbar { display: none; }
+        .bus-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; display: flex; gap: 8px; }
+        .card-active { ring: 2px solid #2563eb; background: #eff6ff !important; }
+        .animate-in { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div id="app" v-cloak class="max-w-md mx-auto min-h-screen flex flex-col">
+
+    <div v-if="!isAdminView" class="p-4 space-y-5 flex-grow pb-12">
+        
+        <header class="space-y-3">
+            <div class="flex justify-between items-center px-1">
+                <div>
+                    <h1 class="text-2xl font-900 tracking-tighter leading-none uppercase">КРАСНО<span class="text-blue-600">Bus</span></h1>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Чувашская Республика</p>
+                </div>
+                <button @click="loginAdmin" class="p-2 text-slate-300 hover:text-blue-600 transition">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-11V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </button>
+            </div>
+
+            <div class="bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">☁️</span>
+                    <div>
+                        <p class="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">с. Красноармейское</p>
+                        <p class="text-sm font-bold text-slate-700">+3°C, Облачно</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] font-black text-blue-600 uppercase">{{ todayDate }}</p>
+                    <p class="text-lg font-900 text-slate-800">{{ liveClock }}</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="space-y-1">
+            <label class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Выберите маршрут:</label>
+            <div class="relative">
+                <select v-model="activeRouteIdx" class="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border-none outline-none ring-1 ring-slate-100 appearance-none">
+                    <option v-for="(r, i) in routes" :value="i">{{ r.name }}</option>
+                </select>
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="vibrant-blue p-7 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
+            <div class="relative z-10">
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">
+                    Ближайший: {{ direction === 'to' ? currentRoute.toLabel : currentRoute.backLabel }}
+                </p>
+                <div class="text-7xl font-900 tracking-tighter mb-3">{{ nextBus ? nextBus.time : '--:--' }}</div>
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-white/20 rounded-xl text-xs font-bold backdrop-blur-md">
+                    <span v-if="nextBus" class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                    {{ nextBus ? 'Через ' + nextBus.diff + ' мин' : 'Рейсов больше нет' }}
+                </div>
+            </div>
+            <svg class="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" fill="currentColor" viewBox="0 0 24 24"><path d="M18 11h-3V8h3m-5 3h-3V8h3m-5 3H5V8h3m10 7H6a1 1 0 0 1-1-1v-1h14v1a1 1 0 0 1-1 1m1-9H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h1v2h2v-2h8v2h2v-2h1c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2Z"/></svg>
+        </div>
+
+        <div class="flex p-1.5 bg-slate-200/40 rounded-2xl">
+            <button @click="direction = 'to'" :class="['flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all', direction === 'to' ? 'bg-white shadow text-blue-600' : 'text-slate-500']">
+                {{ currentRoute.toLabel }}
+            </button>
+            <button @click="direction = 'back'" :class="['flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all', direction === 'back' ? 'bg-white shadow text-blue-600' : 'text-slate-500']">
+                {{ currentRoute.backLabel }}
+            </button>
+        </div>
+
+        <div class="space-y-6 pt-4">
+            <div v-for="group in groupedSchedule" :key="group.hour" class="flex gap-4 items-start border-t border-slate-100 pt-5">
+                <div class="text-4xl font-900 text-slate-200 w-12">{{ group.hour }}</div>
+                <div class="flex-grow grid grid-cols-2 gap-3">
+                    <div v-for="m in group.minutes" @click="openAction(m.full)" 
+                         :class="['p-4 rounded-2xl text-center relative transition-all', m.isPast ? 'bg-slate-50/50 text-slate-300' : 'bg-white text-slate-700 shadow-sm border border-slate-100', { 'card-active': m.isNext }]">
+                        <span class="text-lg font-bold">{{ m.full }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="pt-10 pb-6 flex flex-col items-center gap-6 text-center">
+            <div class="space-y-2">
+                <a href="https://krarm.cap.ru/" target="_blank" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600">Администрация округа</a>
+                <p class="text-[9px] text-slate-300 font-medium tracking-tight">Красноармейский муниципальный округ, 2026</p>
+            </div>
+            <button @click="contactAdmin" class="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-full text-xs font-black shadow-xl shadow-slate-200 active:scale-95 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                Написать администратору
+            </button>
+        </footer>
+    </div>
+
+    <div v-else class="p-5 space-y-6 bg-white min-h-screen">
+        <header class="flex justify-between items-center">
+            <h2 class="text-2xl font-900 uppercase">Админ-центр</h2>
+            <button @click="isAdminView = false" class="px-4 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl text-sm">Выйти</button>
+        </header>
+        <div class="p-8 bg-blue-50 rounded-3xl text-center space-y-3">
+             <p class="text-sm text-blue-800 font-bold">Данные загружаются из Google Таблиц автоматически.</p>
+             <p class="text-[10px] text-blue-400 uppercase">Чтобы изменить расписание, просто отредактируйте вашу таблицу.</p>
+        </div>
+    </div>
+
+    <div v-if="selectedTime" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/40 backdrop-blur-sm" @click.self="selectedTime = null">
+        <div class="w-full bg-white p-8 rounded-[3rem] space-y-5 shadow-2xl animate-in">
+            <div class="text-center">
+                <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Рейс на {{ selectedTime }}</p>
+                <h3 class="text-2xl font-900">Что-то не так?</h3>
+                <p class="text-xs text-slate-400 font-medium italic mt-1">Ваша отметка попадет в администрацию</p>
+            </div>
+            
+            <div class="space-y-3">
+                <button @click="sendToGoogleForm('Не приехал')" class="group w-full p-5 bg-red-50 hover:bg-red-100 text-red-600 rounded-[2rem] font-black flex justify-between items-center transition active:scale-95">
+                    <span>Автобуса не было</span>
+                    <span class="text-xl">⚠️</span>
+                </button>
+                <button @click="sendToGoogleForm('Изменение времени')" class="group w-full p-5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-[2rem] font-black flex justify-between items-center transition active:scale-95">
+                    <span>Другое время</span>
+                    <span class="text-xl">🕒</span>
+                </button>
+                <button @click="selectedTime = null" class="w-full py-2 text-slate-300 font-bold text-[10px] uppercase">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+createApp({
+    setup() {
+        const isAdminView = ref(false);
+        const activeRouteIdx = ref(0);
+        const direction = ref('to');
+        const selectedTime = ref(null);
+        const liveClock = ref('');
+        
+        // --- ВАШИ ССЫЛКИ И НАСТРОЙКИ ---
+        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
+        const FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSc3G_kMXuM36uxcLPuYmfPkCwlsKHjpLmhKRFtmACmSUcd8tg/viewform";
+        const ENTRY_ROUTE = "155515134";
+        const ENTRY_TIME = "1839642945";
+        const ADMIN_PASS = "admin2026";
+
+        const routes = ref([
+            { 
+                name: "Загрузка...", toLabel: "В город", backLabel: "В село",
+                toTimes: [], backTimes: []
+            }
+        ]);
+
+        // Функция загрузки данных из Google Sheets
+        const loadFromSheets = async () => {
+            try {
+                const response = await fetch(SHEET_CSV_URL);
+                const csvText = await response.text();
+                const rows = csvText.split('\n').slice(1); // убираем заголовок
+                
+                const parsedRoutes = {};
+
+                rows.forEach(row => {
+                    const columns = row.split(',');
+                    if (columns.length < 4) return;
+                    
+                    const rName = columns[0].trim();
+                    const rDir = columns[1].trim(); // "to" или "back"
+                    const rTime = columns[2].trim();
+                    
+                    if (!parsedRoutes[rName]) {
+                        parsedRoutes[rName] = { 
+                            name: rName, 
+                            toLabel: "В Чебоксары", backLabel: "В Красноармейское", 
+                            toTimes: [], backTimes: [] 
+                        };
+                    }
+                    
+                    if (rDir === 'to') parsedRoutes[rName].toTimes.push(rTime);
+                    else parsedRoutes[rName].backTimes.push(rTime);
+                });
+
+                const finalData = Object.values(parsedRoutes);
+                if (finalData.length > 0) {
+                    routes.value = finalData;
+                    localStorage.setItem('kb_cached_sheets', JSON.stringify(finalData));
+                }
+            } catch (e) {
+                console.error("Ошибка загрузки Sheets, используем кэш:", e);
+                const cached = localStorage.getItem('kb_cached_sheets');
+                if (cached) routes.value = JSON.parse(cached);
+            }
+        };
+
+        const startClock = () => {
+            const update = () => {
+                const now = new Date();
+                liveClock.value = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            };
+            update();
+            setInterval(update, 30000);
+        };
+
+        onMounted(() => {
+            loadFromSheets();
+            startClock();
+        });
+
+        // --- ВЫЧИСЛЯЕМЫЕ СВОЙСТВА ---
+        const currentRoute = computed(() => routes.value[activeRouteIdx.value] || routes.value[0]);
+        const todayDate = computed(() => new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }));
+
+        const upcomingBuses = computed(() => {
+            const now = new Date();
+            const curMin = now.getHours() * 60 + now.getMinutes();
+            const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
+            return list.map(t => {
+                const [h, m] = t.split(':').map(Number);
+                return { full: t, minutes: h * 60 + m, isPast: (h * 60 + m) < curMin };
+            }).filter(b => !b.isPast);
+        });
+
+        const nextBus = computed(() => {
+            if (!upcomingBuses.value.length) return null;
+            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+            return { time: upcomingBuses.value[0].full, diff: upcomingBuses.value[0].minutes - nowMin };
+        });
+
+        const groupedSchedule = computed(() => {
+            const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
+            const groups = {};
+            const nextTime = nextBus.value ? nextBus.value.time : null;
+            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+            
+            list.forEach(t => {
+                const h = t.split(':')[0];
+                if (!groups[h]) groups[h] = [];
+                const [h_n, m_n] = t.split(':').map(Number);
+                groups[h].push({ full: t, isPast: (h_n * 60 + m_n) < nowMin, isNext: t === nextTime });
+            });
+            return Object.keys(groups).sort().map(h => ({ hour: h, minutes: groups[h] }));
+        });
+
+        // --- МЕТОДЫ ---
+        function sendToGoogleForm(type) {
+            const url = `${FORM_BASE_URL}?usp=pp_url&entry.${ENTRY_ROUTE}=${encodeURIComponent(currentRoute.value.name)}&entry.${ENTRY_TIME}=${encodeURIComponent(selectedTime.value)}`;
+            window.open(url, '_blank');
+            selectedTime.value = null;
+        }
+
+        function loginAdmin() {
+            const pass = prompt("Доступ только для администрации:");
+            if (pass === ADMIN_PASS) isAdminView.value = true;
+            else if (pass) alert("Доступ запрещен");
+        }
+
+        function openAction(t) { selectedTime.value = t; }
+        function contactAdmin() { window.open('https://t.me/your_admin_username', '_blank'); }
+
+        return { 
+            isAdminView, activeRouteIdx, direction, routes, currentRoute, todayDate, liveClock,
+            upcomingBuses, nextBus, groupedSchedule, selectedTime, 
+            openAction, sendToGoogleForm, contactAdmin, loginAdmin
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
