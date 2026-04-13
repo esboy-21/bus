@@ -171,7 +171,6 @@ createApp({
         const liveClock = ref('');
         const weather = ref({ temp: '...', desc: 'Загрузка', icon: '⏳' });
         
-        const FORM_ID = "1FAIpQLSe3qTz79vA_69tW-DInV35O7E6-M-Vw86M6xG9_h6z_l_0vAw"; 
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
         
         const fetchWeather = async () => {
@@ -263,10 +262,13 @@ createApp({
             selectedTime.value = null;
         };
 
-        const submitReport = (type, newTime = '') => {
+        // НОВАЯ ФУНКЦИЯ ОТПРАВКИ
+        const submitReport = async (type, newTime = '') => {
             const routeName = currentRoute.value.name;
             const busTime = selectedTime.value;
             
+            const ACTUAL_FORM_ID = "1FAIpQLSeIAw-Vjr2iiDPNuicCMv4w96SNS0ul4hD7_h8vuJMt9287EA";
+
             const entryIds = {
                 route: "entry.155515134", 
                 time: "entry.1839642945",  
@@ -275,20 +277,28 @@ createApp({
                 deviceId: "entry.347648695"
             };
 
-            const url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse?` + 
-                        `${entryIds.route}=${encodeURIComponent(routeName)}&` +
-                        `${entryIds.time}=${encodeURIComponent(busTime)}&` +
-                        `${entryIds.issue}=${encodeURIComponent(type)}&` +
-                        `${entryIds.newTime}=${encodeURIComponent(newTime)}&` +
-                        `${entryIds.deviceId}=${encodeURIComponent(navigator.userAgent)}&submit=Submit`;
+            const formData = new FormData();
+            formData.append(entryIds.route, routeName);
+            formData.append(entryIds.time, busTime);
+            formData.append(entryIds.issue, type);
+            formData.append(entryIds.newTime, newTime);
+            formData.append(entryIds.deviceId, navigator.userAgent);
 
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = url;
-            document.body.appendChild(iframe);
+            const url = `https://docs.google.com/forms/d/e/${ACTUAL_FORM_ID}/formResponse`;
 
-            alert("Спасибо! Ваше сообщение отправлено администратору.");
-            closeModal();
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: formData
+                });
+                alert("Спасибо! Ваше сообщение отправлено администратору.");
+            } catch (e) {
+                console.error("Ошибка отправки:", e);
+                alert("Произошла ошибка при отправке. Попробуйте еще раз.");
+            } finally {
+                closeModal();
+            }
         };
 
         const contactAdmin = () => {
