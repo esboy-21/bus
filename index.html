@@ -171,7 +171,6 @@ createApp({
         const liveClock = ref('');
         const weather = ref({ temp: '...', desc: 'Загрузка', icon: '⏳' });
         
-        // URL вашей формы (замените на ваш актуальный ID)
         const FORM_ID = "1FAIpQLSe3qTz79vA_69tW-DInV35O7E6-M-Vw86M6xG9_h6z_l_0vAw"; 
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
         
@@ -257,41 +256,38 @@ createApp({
 
         const openAction = (t) => { 
             selectedTime.value = t; 
-            suggestedTime.value = t; // По умолчанию ставим текущее время рейса для удобства правки
+            suggestedTime.value = t;
         };
 
         const closeModal = () => {
             selectedTime.value = null;
         };
 
-        // ДОРАБОТАННАЯ ФУНКЦИЯ ОТПРАВКИ В GOOGLE ФОРМУ
         const submitReport = (type, newTime = '') => {
             const routeName = currentRoute.value.name;
             const busTime = selectedTime.value;
             
-           
-            
             const entryIds = {
-                route: "entry.155515134", //  ID поля "Маршрут"
-                time: "entry.1839642945",  //  ID поля "Рейс"
-                issue: "entry.848453581", //  ID поля "Тип проблемы"
-                newTime: "entry.882633031" //  ID поля "Новое время"
-                deviceId: "entry.347648695" // ID устройства
-			};
+                route: "entry.155515134", 
+                time: "entry.1839642945",  
+                issue: "entry.848453581", 
+                newTime: "entry.882633031",
+                deviceId: "entry.347648695"
+            };
 
             const url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse?` + 
                         `${entryIds.route}=${encodeURIComponent(routeName)}&` +
                         `${entryIds.time}=${encodeURIComponent(busTime)}&` +
                         `${entryIds.issue}=${encodeURIComponent(type)}&` +
-                        `${entryIds.newTime}=${encodeURIComponent(newTime)}&submit=Submit`;
+                        `${entryIds.newTime}=${encodeURIComponent(newTime)}&` +
+                        `${entryIds.deviceId}=${encodeURIComponent(navigator.userAgent)}&submit=Submit`;
 
-            // Отправка через скрытый iframe (без перезагрузки страницы)
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
             iframe.src = url;
             document.body.appendChild(iframe);
 
-            alert("Спасибо! Ваше сообщение отправлено администратору для проверки.");
+            alert("Спасибо! Ваше сообщение отправлено администратору.");
             closeModal();
         };
 
