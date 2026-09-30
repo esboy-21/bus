@@ -2,42 +2,46 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#2563eb">
     <title>КрасноBus — Транспорт Чувашии</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Версия Vue зафиксирована: @3 без версии может однажды «уехать» на несовместимую -->
+    <script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
         .vibrant-blue { background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%); }
-        .is-past { opacity: 0.3; filter: grayscale(1); }
         [v-cloak] { display: none; }
         .bus-scroll::-webkit-scrollbar { display: none; }
         .bus-scroll { -ms-overflow-style: none; scrollbar-width: none; overflow-x: auto; display: flex; gap: 8px; }
-        .card-active { ring: 3px solid #2563eb; background: #eff6ff !important; }
-        .animate-in { animation: slideUp 0.3s ease-out; }
+        .card-active { box-shadow: 0 0 0 3px #2563eb; background: #eff6ff !important; }
+        .animate-in { animation: slideUp 0.25s ease-out; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) { .animate-in, .animate-pulse { animation: none; } }
+        button:focus-visible, select:focus-visible, a:focus-visible, [role="button"]:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
     </style>
 </head>
 <body>
 
 <div id="app" v-cloak class="max-w-md mx-auto min-h-screen flex flex-col">
 
-    <div v-if="!isAdminView" class="p-4 space-y-5 flex-grow pb-12">
-        
+    <div class="p-4 space-y-5 flex-grow pb-12">
+
+        <!-- ШАПКА -->
         <header class="space-y-3">
             <div class="flex justify-between items-center px-1">
                 <div>
-                    <h1 class="text-2xl font-900 tracking-tighter leading-none uppercase">КРАСНО<span class="text-blue-600">Bus</span></h1>
+                    <h1 class="text-2xl font-black tracking-tighter leading-none uppercase">КРАСНО<span class="text-blue-600">Bus</span></h1>
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Чувашская Республика</p>
                 </div>
-                <button @click="loginAdmin" class="p-2 text-slate-300 hover:text-blue-600 transition">
-                    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-11V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <button @click="shareSite" class="p-2 text-slate-300 hover:text-blue-600 transition" aria-label="Поделиться">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v14"/></svg>
                 </button>
             </div>
 
-            <a href="https://yandex.ru/pogoda/krasnoarmeyskoye-chuvashia" target="_blank" class="block bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100 active:scale-[0.98] transition">
+            <a href="https://yandex.ru/pogoda/krasnoarmeyskoye-chuvashia" target="_blank" rel="noopener" class="block bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100 active:scale-[0.98] transition">
                 <div class="flex items-center gap-3">
                     <span class="text-2xl">{{ weather.icon }}</span>
                     <div>
@@ -47,19 +51,25 @@
                 </div>
                 <div class="text-right border-l border-slate-100 pl-4">
                     <p class="text-[10px] font-black text-blue-600 uppercase">{{ todayDate }}</p>
-                    <p class="text-lg font-900 text-slate-800">{{ liveClock }}</p>
+                    <p class="text-lg font-black text-slate-800">{{ liveClock }}</p>
                 </div>
             </a>
         </header>
 
+        <!-- Предупреждение о сети/кэше -->
+        <div v-if="dataWarning" class="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-semibold text-amber-700">
+            {{ dataWarning }}
+        </div>
+
+        <!-- ВЫБОР МАРШРУТА -->
         <div class="space-y-1">
             <div class="flex items-center justify-between px-2">
-                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Выберите маршрут</label>
+                <label for="routeSelect" class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Выберите маршрут</label>
                 <span class="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">Актуально на 2026</span>
             </div>
             <div class="relative">
-                <select v-model="activeRouteIdx" class="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border-none outline-none ring-1 ring-slate-100 appearance-none">
-                    <option v-for="(r, i) in routes" :value="i">{{ r.name }}</option>
+                <select id="routeSelect" v-model="activeRouteName" class="w-full p-4 pr-10 bg-white rounded-2xl font-bold shadow-sm border-none outline-none ring-1 ring-slate-100 appearance-none">
+                    <option v-for="r in routes" :key="r.name" :value="r.name">{{ routeTitle(r) }}</option>
                 </select>
                 <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
@@ -67,32 +77,47 @@
             </div>
         </div>
 
+        <!-- БЛИЖАЙШИЙ РЕЙС -->
         <div class="vibrant-blue p-7 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
             <div class="relative z-10">
                 <p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">
-                    Ближайший: {{ direction === 'to' ? currentRoute.toLabel : currentRoute.backLabel }}
+                    {{ nextBus && nextBus.tomorrow ? 'Первый завтра' : 'Ближайший' }}: {{ dirLabel }}
                 </p>
-                <div class="text-7xl font-900 tracking-tighter mb-3">{{ nextBus ? nextBus.time : '--:--' }}</div>
-                <div @click="nextBus ? openAction(nextBus.time) : null" class="inline-flex items-center gap-2 px-4 py-2 bg-white/20 rounded-xl text-xs font-bold backdrop-blur-md cursor-pointer active:scale-95 transition">
-                    <span v-if="nextBus" class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                    {{ nextBus ? 'Через ' + nextBus.diff + ' мин' : 'Рейсов больше нет' }}
+                <div class="flex items-end gap-3 mb-3">
+                    <div class="text-7xl font-black tracking-tighter leading-none">{{ nextBus ? nextBus.t : '--:--' }}</div>
+                    <div v-if="nextBus" class="pb-2 space-y-1">
+                        <span v-if="currentRoute.merged && nextBus.no" class="block text-xs font-black bg-white/25 px-2 py-0.5 rounded-lg">№{{ nextBus.no }}</span>
+                        <span v-if="nextBus.arr" class="block text-[11px] font-bold opacity-80">приб. ≈ {{ nextBus.arr }}</span>
+                    </div>
+                </div>
+                <div role="button" tabindex="0" @click="nextBus && openAction(nextBus)" @keyup.enter="nextBus && openAction(nextBus)"
+                     class="inline-flex items-center gap-2 px-4 py-2 bg-white/20 rounded-xl text-xs font-bold backdrop-blur-md cursor-pointer active:scale-95 transition">
+                    <span v-if="nextBus && !nextBus.tomorrow" class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                    <template v-if="!loaded">Загружаем расписание…</template>
+                    <template v-else-if="!nextBus">Нет рейсов в этом направлении</template>
+                    <template v-else>Через {{ fmtDiff(nextBus.diff) }}</template>
+                    <span v-if="nextBus && reportsFor(nextBus).length" class="ml-1">⚠️ {{ reportsFor(nextBus).length }}</span>
                 </div>
             </div>
             <svg class="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" fill="currentColor" viewBox="0 0 24 24"><path d="M18 11h-3V8h3m-5 3h-3V8h3m-5 3H5V8h3m10 7H6a1 1 0 0 1-1-1v-1h14v1a1 1 0 0 1-1 1m1-9H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h1v2h2v-2h8v2h2v-2h1c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2Z"/></svg>
         </div>
 
+        <!-- СЛЕДУЮЩИЕ СЕГОДНЯ -->
         <div v-if="upcomingBuses.length > 1" class="space-y-2">
             <p class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Следующие сегодня</p>
             <div class="bus-scroll pb-2">
-                <div v-for="(bus, index) in upcomingBuses.slice(1)" :key="index" 
-                     @click="openAction(bus.full)"
+                <div v-for="bus in upcomingBuses.slice(1)" :key="bus.key"
+                     role="button" tabindex="0" @click="openAction(bus)" @keyup.enter="openAction(bus)"
                      class="min-w-[110px] p-4 bg-white rounded-2xl border border-slate-100 shadow-sm active:scale-95 transition cursor-pointer">
-                    <p class="text-lg font-black text-blue-600 leading-none mb-1">{{ bus.full }}</p>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase leading-none">через {{ bus.minutes - (new Date().getHours() * 60 + new Date().getMinutes()) }} м</p>
+                    <p class="text-lg font-black text-blue-600 leading-none mb-1">{{ bus.t }}</p>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase leading-none">
+                        через {{ fmtDiff(bus.min - nowMin) }}<span v-if="currentRoute.merged && bus.no"> · №{{ bus.no }}</span>
+                    </p>
                 </div>
             </div>
         </div>
 
+        <!-- НАПРАВЛЕНИЕ -->
         <div class="flex p-1.5 bg-slate-200/40 rounded-2xl">
             <button @click="direction = 'to'" :class="['flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all', direction === 'to' ? 'bg-white shadow text-blue-600' : 'text-slate-500']">
                 {{ currentRoute.toLabel }}
@@ -102,34 +127,69 @@
             </button>
         </div>
 
-        <div class="space-y-6 pt-4">
+        <!-- ПРИМЕЧАНИЯ МАРШРУТА -->
+        <div v-for="n in currentNotes" :key="n.text" class="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-xs text-amber-800 leading-relaxed">
+            <span v-if="n.no" class="font-black">№{{ n.no }}: </span>{{ n.text }}
+        </div>
+
+        <!-- ПОЛНОЕ РАСПИСАНИЕ -->
+        <div class="space-y-6 pt-2">
+            <button v-if="pastCount && !showPast" @click="showPast = true" class="w-full py-3 text-[11px] font-bold text-slate-400 bg-slate-100/60 rounded-2xl">
+                Показать ушедшие рейсы ({{ pastCount }})
+            </button>
             <div v-for="group in groupedSchedule" :key="group.hour" class="flex gap-4 items-start border-t border-slate-100 pt-5">
-                <div class="text-4xl font-900 text-slate-200 w-12">{{ group.hour }}</div>
+                <div class="text-4xl font-black text-slate-200 w-12">{{ group.hour }}</div>
                 <div class="flex-grow grid grid-cols-2 gap-3">
-                    <div v-for="m in group.minutes" @click="openAction(m.full)" 
-                         :class="['p-4 rounded-2xl text-center relative transition-all cursor-pointer', m.isPast ? 'bg-slate-50/50 text-slate-300' : 'bg-white text-slate-700 shadow-sm border border-slate-100', { 'card-active': m.isNext }]">
-                        <span class="text-lg font-bold">{{ m.full }}</span>
+                    <div v-for="m in group.items" :key="m.key" role="button" tabindex="0"
+                         @click="openAction(m)" @keyup.enter="openAction(m)"
+                         :class="['p-3 rounded-2xl text-center relative transition-all cursor-pointer', m.isPast ? 'bg-slate-50/50 text-slate-300' : 'bg-white text-slate-700 shadow-sm border border-slate-100', { 'card-active': m.isNext }]">
+                        <span class="text-lg font-bold block leading-tight">{{ m.t }}</span>
+                        <span v-if="m.arr || (currentRoute.merged && m.no)" class="text-[10px] font-semibold text-slate-400 block">
+                            <span v-if="currentRoute.merged && m.no" class="text-blue-500 font-black">№{{ m.no }}</span>
+                            <span v-if="m.arr"> приб. {{ m.arr }}</span>
+                        </span>
+                        <span v-if="reportsFor(m).length" class="absolute -top-1.5 -right-1.5 text-[10px] bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center font-black" title="Сегодня есть сообщения пассажиров">!</span>
                     </div>
                 </div>
             </div>
+            <p v-if="loaded && !activeList.length" class="text-center text-sm text-slate-400 py-6">В этом направлении рейсов нет</p>
         </div>
 
-        <footer class="pt-10 pb-6 flex flex-col items-center gap-6 text-center">
+        <!-- ПОДВАЛ -->
+        <footer class="pt-10 pb-6 flex flex-col items-center gap-4 text-center">
+            <a v-for="p in currentPhones" :key="p.phone" :href="'tel:' + p.phone.replace(/[^\d+]/g, '')"
+               class="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-full text-xs font-black shadow-sm border border-slate-100 active:scale-95 transition">
+                📞 Перевозчик<span v-if="p.no"> №{{ p.no }}</span>: {{ p.phone }}
+            </a>
             <button @click="contactAdmin" class="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-full text-xs font-black shadow-xl active:scale-95 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                 Написать администратору
             </button>
+            <p v-if="dataStamp" class="text-[10px] text-slate-300 font-semibold">Расписание загружено {{ dataStamp }}</p>
         </footer>
     </div>
 
-    <div v-if="selectedTime" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="closeModal">
-        <div class="w-full bg-white p-6 rounded-[2.5rem] space-y-6 shadow-2xl animate-in">
+    <!-- МОДАЛКА РЕЙСА -->
+    <div v-if="selected" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="closeModal">
+        <div class="w-full max-w-md mx-auto bg-white p-6 rounded-[2.5rem] space-y-5 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
             <div class="text-center">
                 <div class="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-4"></div>
-                <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Рейс на {{ selectedTime }}</p>
-                <h3 class="text-xl font-900">Что-то не так с расписанием?</h3>
+                <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">
+                    Рейс {{ selected.t }}<span v-if="selected.no"> · №{{ selected.no }}</span>
+                </p>
+                <p class="text-xs text-slate-400 font-semibold">{{ selected.route }} · {{ dirLabel.toLowerCase() }}</p>
+                <p v-if="selected.arr" class="text-xs text-slate-500 font-bold mt-1">Прибытие ≈ {{ selected.arr }}</p>
             </div>
-            
+
+            <div v-if="reportsFor(selected).length" class="p-4 bg-red-50 rounded-2xl border border-red-100 space-y-1">
+                <p class="text-xs font-black text-red-600">Сегодня пассажиры сообщили:</p>
+                <p v-for="(r, i) in reportsFor(selected)" :key="i" class="text-xs text-red-700">
+                    {{ r.at }} — {{ r.issue || 'сообщение' }}<span v-if="r.newTime"> (новое время {{ r.newTime }})</span>
+                </p>
+            </div>
+
+            <h3 class="text-xl font-black text-center">Что-то не так с рейсом?</h3>
+
             <div class="space-y-3">
                 <button @click="submitReport('Автобуса не было')" class="w-full p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex justify-between items-center active:scale-95 transition border border-red-100">
                     <span class="flex flex-col items-start">
@@ -137,6 +197,11 @@
                         <span class="text-[9px] opacity-70 font-medium italic">Трактуется как отмена рейса</span>
                     </span>
                     <span class="text-xl">🚫</span>
+                </button>
+
+                <button @click="submitReport('Опоздал')" class="w-full p-4 bg-amber-50 text-amber-700 rounded-2xl font-bold flex justify-between items-center active:scale-95 transition border border-amber-100">
+                    <span>Автобус сильно опоздал</span>
+                    <span class="text-xl">🐢</span>
                 </button>
 
                 <button @click="submitReport('Рейса больше нет')" class="w-full p-4 bg-orange-50 text-orange-600 rounded-2xl font-bold flex justify-between items-center active:scale-95 transition border border-orange-100">
@@ -153,34 +218,110 @@
                 </div>
             </div>
 
-            <button @click="closeModal" class="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">Отмена</button>
+            <button @click="closeModal" class="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">Закрыть</button>
         </div>
     </div>
 
 </div>
 
 <script>
-const { createApp, ref, computed, onMounted } = Vue;
+const { createApp, ref, computed, onMounted, watch } = Vue;
+
+/* ================= НАСТРОЙКИ ================= */
+
+// Лист «Расписание» (опубликован как CSV)
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
+
+// Лист с публичными отчётами пассажиров (A:дата, B:маршрут, C:рейс, D:тип, E:новое время).
+// Пусто = функция отметок «!» на рейсах выключена. Как сделать — см. инструкцию.
+const REPORTS_CSV_URL = "";
+
+const FORM_ID = "1FAIpQLSeIAw-Vjr2iiDPNuicCMv4w96SNS0ul4hD7_h8vuJMt9287EA";
+const ENTRY = {
+    route:    "entry.155515134",
+    time:     "entry.1839642945",
+    issue:    "entry.347648695",   // ← проверьте! в таблице колонка «Тип проблемы» пустая
+    newTime:  "entry.848453581",
+    deviceId: "entry.882633031"
+};
+
+const ADMIN_EMAIL = "maximus21rus@mail.ru";
+
+/* ================= УТИЛИТЫ ================= */
+
+// Полноценный CSV-парсер: кавычки, запятые и переносы строк внутри ячеек
+function parseCSV(text) {
+    const rows = []; let row = [], f = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) {
+            if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+            else f += c;
+        } else if (c === '"') q = true;
+        else if (c === ',') { row.push(f); f = ''; }
+        else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+        else if (c !== '\r') f += c;
+    }
+    if (f || row.length) { row.push(f); rows.push(row); }
+    return rows;
+}
+
+// "6:30" / "06.30" / "06:30:00" → "06:30"
+const normTime = (s) => {
+    const m = String(s || '').trim().match(/^(\d{1,2})[:.](\d{2})(?::\d{2})?$/);
+    return m ? m[1].padStart(2, '0') + ':' + m[2] : null;
+};
+const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+// Ячейка "06:30>07:40, 07:50" → [{t:'06:30', arr:'07:40'}, {t:'07:50'}]
+const parseTimes = (cell, no, route) => String(cell || '')
+    .split(/[,;\n]/)
+    .map(tok => {
+        const [dep, arr] = tok.split('>');
+        const t = normTime(dep);
+        return t ? { t, arr: normTime(arr), no, route, min: toMin(t) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.min - b.min);
+
+const todayKey = () => {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+};
+
+const store = {
+    get(k, def = null) { try { const v = localStorage.getItem(k); return v === null ? def : JSON.parse(v); } catch (e) { return def; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+/* ================= ПРИЛОЖЕНИЕ ================= */
 
 createApp({
     setup() {
-        const isAdminView = ref(false);
-        const activeRouteIdx = ref(0);
-        const direction = ref('to');
-        const selectedTime = ref(null);
+        const routes = ref([{ name: "Загрузка...", toLabel: "...", backLabel: "...", to: [], back: [], notes: [], phones: [] }]);
+        const loaded = ref(false);
+        const dataStamp = ref('');
+        const dataWarning = ref('');
+        const activeRouteName = ref(store.get('kb:route', ''));
+        const direction = ref(store.get('kb:dir', 'to'));
+        const showPast = ref(false);
+        const selected = ref(null);
         const suggestedTime = ref('');
-        const liveClock = ref('');
+        const now = ref(new Date());
         const weather = ref({ temp: '...', desc: 'Загрузка', icon: '⏳' });
-        
-        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=632126588&single=true&output=csv";
-        
+        const reports = ref({}); // "маршрут|время" → [{at, issue, newTime}]
+
+        watch(activeRouteName, v => { store.set('kb:route', v); showPast.value = false; });
+        watch(direction, v => { store.set('kb:dir', v); showPast.value = false; });
+
+        /* ---------- Погода ---------- */
         const fetchWeather = async () => {
             try {
-                const response = await fetch("https://api.open-meteo.com/v1/forecast?latitude=55.76&longitude=47.17&current_weather=true&timezone=Europe%2FMoscow");
-                const data = await response.json();
+                const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=55.76&longitude=47.17&current_weather=true&timezone=Europe%2FMoscow");
+                const data = await r.json();
                 const temp = Math.round(data.current_weather.temperature);
                 const code = data.current_weather.weathercode;
-                let desc = "Ясно"; let icon = "☀️";
+                let desc = "Ясно", icon = "☀️";
                 if (code > 0 && code <= 3) { desc = "Переменная облачность"; icon = "⛅"; }
                 if (code >= 45 && code <= 48) { desc = "Туман"; icon = "🌫️"; }
                 if (code >= 51 && code <= 67) { desc = "Дождь"; icon = "🌧️"; }
@@ -188,130 +329,195 @@ createApp({
                 if (code >= 80 && code <= 82) { desc = "Ливень"; icon = "🌦️"; }
                 if (code >= 95) { desc = "Гроза"; icon = "⚡"; }
                 weather.value = { temp, desc, icon };
-            } catch (e) { weather.value = { temp: '?', desc: 'Ошибка', icon: '📡' }; }
+            } catch (e) { weather.value = { temp: '?', desc: 'Нет данных', icon: '📡' }; }
         };
 
-        const routes = ref([{ name: "Загрузка...", toLabel: "...", backLabel: "...", toTimes: [], backTimes: [] }]);
+        /* ---------- Расписание ---------- */
+        // Колонки листа: A Название | B Туда-метка | C Назад-метка | D Туда | E Назад
+        //                | F Номер (необяз.) | G Примечание (необяз.) | H Телефон (необяз.)
+        const buildRoutes = (csv) => {
+            const list = parseCSV(csv).slice(1).map(c => {
+                const name = (c[0] || '').trim();
+                if (!name || c.length < 5) return null;
+                const no = (c[5] || '').trim();
+                const note = (c[6] || '').trim();
+                const phone = (c[7] || '').trim();
+                return {
+                    name, no,
+                    toLabel: (c[1] || '').trim() || "В ЧЕБОКСАРЫ",
+                    backLabel: (c[2] || '').trim() || "В КРАСНОАРМЕЙСКОЕ",
+                    to: parseTimes(c[3], no, name),
+                    back: parseTimes(c[4], no, name),
+                    notes: note ? [{ no: '', text: note }] : [],
+                    phones: phone ? [{ no, phone }] : []
+                };
+            }).filter(Boolean);
+
+            // Сводные маршруты: все строки с одинаковыми метками направлений (напр. 121 и 560 в Чебоксары)
+            const groups = {};
+            list.forEach(r => { const k = r.toLabel + '|' + r.backLabel; (groups[k] = groups[k] || []).push(r); });
+            const merged = Object.values(groups).filter(g => g.length > 1).map(g => {
+                const nos = [...new Set(g.map(r => r.no).filter(Boolean))];
+                const sortAll = arr => arr.sort((a, b) => a.min - b.min || String(a.no).localeCompare(String(b.no)));
+                return {
+                    name: `★ Все рейсы ${g[0].toLabel.toLowerCase()} и обратно` + (nos.length ? ` (№${nos.join(', №')})` : ''),
+                    merged: true,
+                    toLabel: g[0].toLabel, backLabel: g[0].backLabel,
+                    to: sortAll(g.flatMap(r => r.to)),
+                    back: sortAll(g.flatMap(r => r.back)),
+                    notes: g.flatMap(r => r.notes.map(n => ({ no: r.no, text: n.text }))),
+                    phones: g.flatMap(r => r.phones)
+                };
+            });
+            return [...merged, ...list];
+        };
+
+        const applyCsv = (csv) => {
+            const data = buildRoutes(csv);
+            if (!data.length) return false;
+            routes.value = data;
+            if (!data.some(r => r.name === activeRouteName.value)) activeRouteName.value = data[0].name;
+            loaded.value = true;
+            return true;
+        };
 
         const loadFromSheets = async () => {
+            const cached = store.get('kb:csv');
+            if (cached && applyCsv(cached.csv)) dataStamp.value = cached.at;
             try {
-                const response = await fetch(SHEET_CSV_URL);
-                const csvText = await response.text();
-                const rows = csvText.split(/\r?\n/).slice(1); 
-                const finalData = rows.map(row => {
-                    const columns = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                    if (columns.length < 5) return null;
-                    const clean = (val) => val ? val.replace(/^"|"$/g, '').trim() : '';
-                    return {
-                        name: clean(columns[0]),
-                        toLabel: clean(columns[1]) || "В ЧЕБОКСАРЫ",
-                        backLabel: clean(columns[2]) || "В КРАСНОАРМЕЙСКОЕ",
-                        toTimes: clean(columns[3]).split(',').map(t => t.trim()).filter(t => t),
-                        backTimes: clean(columns[4]).split(',').map(t => t.trim()).filter(t => t)
-                    };
-                }).filter(r => r !== null && r.name);
-                if (finalData.length > 0) routes.value = finalData;
-            } catch (e) { console.error(e); }
-        };
-
-        const startClock = () => {
-            const update = () => { liveClock.value = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
-            update(); setInterval(update, 30000);
-        };
-
-        onMounted(() => { loadFromSheets(); startClock(); fetchWeather(); });
-
-        const currentRoute = computed(() => routes.value[activeRouteIdx.value] || routes.value[0]);
-        const todayDate = computed(() => new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }));
-
-        const upcomingBuses = computed(() => {
-            const now = new Date();
-            const curMin = now.getHours() * 60 + now.getMinutes();
-            const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
-            return list.map(t => {
-                const [h, m] = t.split(':').map(Number);
-                return { full: t, minutes: h * 60 + m };
-            }).filter(b => b.minutes >= curMin).sort((a, b) => a.minutes - b.minutes);
-        });
-
-        const nextBus = computed(() => {
-            if (!upcomingBuses.value.length) return null;
-            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-            return { time: upcomingBuses.value[0].full, diff: upcomingBuses.value[0].minutes - nowMin };
-        });
-
-        const groupedSchedule = computed(() => {
-            const list = direction.value === 'to' ? currentRoute.value.toTimes : currentRoute.value.backTimes;
-            const groups = {};
-            const nextTime = nextBus.value ? nextBus.value.time : null;
-            const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-            list.forEach(t => {
-                const h = t.split(':')[0];
-                if (!groups[h]) groups[h] = [];
-                const [h_n, m_n] = t.split(':').map(Number);
-                groups[h].push({ full: t, isPast: (h_n * 60 + m_n) < nowMin, isNext: t === nextTime });
-            });
-            return Object.keys(groups).sort().map(h => ({ hour: h, minutes: groups[h] }));
-        });
-
-        const openAction = (t) => { 
-            selectedTime.value = t; 
-            suggestedTime.value = t;
-        };
-
-        const closeModal = () => {
-            selectedTime.value = null;
-        };
-
-        // НОВАЯ ФУНКЦИЯ ОТПРАВКИ 
-        const submitReport = async (type, newTime = '') => {
-            const routeName = currentRoute.value.name;
-            const busTime = selectedTime.value;
-            
-            const ACTUAL_FORM_ID = "1FAIpQLSeIAw-Vjr2iiDPNuicCMv4w96SNS0ul4hD7_h8vuJMt9287EA";
-
-            const entryIds = {
-                route: "entry.155515134", 
-                time: "entry.1839642945",  
-                issue: "entry.347648695", 
-                newTime: "entry.848453581",
-                deviceId: "entry.882633031"
-            };
-
-            const formData = new FormData();
-            formData.append(entryIds.route, routeName);
-            formData.append(entryIds.time, busTime);
-            formData.append(entryIds.issue, type);
-            formData.append(entryIds.newTime, newTime);
-            formData.append(entryIds.deviceId, navigator.userAgent);
-
-            const url = `https://docs.google.com/forms/d/e/${ACTUAL_FORM_ID}/formResponse`;
-
-            try {
-                await fetch(url, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: formData
-                });
-                alert("Спасибо! Ваше сообщение отправлено администратору.");
+                const r = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
+                if (!r.ok) throw new Error(r.status);
+                const csv = await r.text();
+                if (applyCsv(csv)) {
+                    const at = new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                    store.set('kb:csv', { csv, at });
+                    dataStamp.value = at; dataWarning.value = '';
+                }
             } catch (e) {
-                console.error("Ошибка отправки:", e);
-                alert("Произошла ошибка при отправке. Попробуйте еще раз.");
-            } finally {
-                closeModal();
+                console.error(e);
+                dataWarning.value = cached
+                    ? `Нет связи — показано сохранённое расписание (${cached.at}).`
+                    : 'Не удалось загрузить расписание. Проверьте интернет.';
             }
         };
 
-        const contactAdmin = () => {
-            window.location.href = `mailto:maximus21rus@mail.ru?subject=Вопрос по КрасноBus`;
+        /* ---------- Отчёты пассажиров ---------- */
+        const loadReports = async () => {
+            if (!REPORTS_CSV_URL) return;
+            try {
+                const r = await fetch(REPORTS_CSV_URL, { cache: 'no-store' });
+                const rows = parseCSV(await r.text()).slice(1);
+                const today = todayKey(), map = {};
+                rows.forEach(c => {
+                    const ts = (c[0] || '').trim();
+                    const m = ts.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}:\d{2})/);
+                    if (!m) return;
+                    const day = `${m[1].padStart(2, '0')}.${m[2].padStart(2, '0')}.${m[3]}`;
+                    const t = normTime(c[2]);
+                    if (day !== today || !t) return;
+                    const key = (c[1] || '').trim() + '|' + t;
+                    (map[key] = map[key] || []).push({ at: normTime(m[4]), issue: (c[3] || '').trim(), newTime: normTime(c[4]) });
+                });
+                reports.value = map;
+            } catch (e) { console.error(e); }
+        };
+        const reportsFor = (bus) => bus ? (reports.value[bus.route + '|' + bus.t] || []) : [];
+
+        onMounted(() => {
+            loadFromSheets(); fetchWeather(); loadReports();
+            setInterval(() => { now.value = new Date(); }, 15000);
+            setInterval(loadReports, 120000);
+            setInterval(fetchWeather, 900000);
+            // Вернулись в приложение после сна телефона — сразу обновить время
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) { now.value = new Date(); loadReports(); }
+            });
+        });
+
+        /* ---------- Вычисляемые ---------- */
+        const currentRoute = computed(() => routes.value.find(r => r.name === activeRouteName.value) || routes.value[0]);
+        const liveClock = computed(() => now.value.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+        const todayDate = computed(() => now.value.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }));
+        const nowMin = computed(() => now.value.getHours() * 60 + now.value.getMinutes());
+        const dirLabel = computed(() => direction.value === 'to' ? currentRoute.value.toLabel : currentRoute.value.backLabel);
+        const activeList = computed(() => (direction.value === 'to' ? currentRoute.value.to : currentRoute.value.back)
+            .map((b, i) => ({ ...b, key: b.route + b.t + i })));
+
+        const upcomingBuses = computed(() => activeList.value.filter(b => b.min >= nowMin.value));
+
+        const nextBus = computed(() => {
+            const up = upcomingBuses.value[0];
+            if (up) return { ...up, diff: up.min - nowMin.value, tomorrow: false };
+            const first = activeList.value[0];
+            if (first) return { ...first, diff: 1440 - nowMin.value + first.min, tomorrow: true };
+            return null;
+        });
+
+        const pastCount = computed(() => activeList.value.filter(b => b.min < nowMin.value).length);
+
+        const groupedSchedule = computed(() => {
+            const nextKey = nextBus.value && !nextBus.value.tomorrow ? nextBus.value.key : null;
+            const groups = {};
+            activeList.value.forEach(b => {
+                const isPast = b.min < nowMin.value;
+                if (isPast && !showPast.value) return;
+                const h = b.t.slice(0, 2);
+                (groups[h] = groups[h] || []).push({ ...b, isPast, isNext: b.key === nextKey });
+            });
+            return Object.keys(groups).sort().map(h => ({ hour: h, items: groups[h] }));
+        });
+
+        const currentNotes = computed(() => currentRoute.value.notes || []);
+        const currentPhones = computed(() => currentRoute.value.phones || []);
+
+        /* ---------- Действия ---------- */
+        const fmtDiff = (m) => m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч ${m % 60} мин`;
+        const routeTitle = (r) => (r.no && !r.merged ? `№${r.no} · ` : '') + r.name;
+
+        const openAction = (bus) => { selected.value = bus; suggestedTime.value = bus.t; };
+        const closeModal = () => { selected.value = null; };
+
+        const submitReport = async (type, newTime = '') => {
+            const bus = selected.value;
+            if (!bus) return;
+            const lockKey = `kb:rep:${todayKey()}:${bus.route}:${bus.t}:${type}`;
+            if (store.get(lockKey)) { alert("Вы уже сообщали об этом рейсе сегодня. Спасибо!"); closeModal(); return; }
+
+            const fd = new FormData();
+            fd.append(ENTRY.route, bus.route);
+            fd.append(ENTRY.time, bus.t);
+            fd.append(ENTRY.issue, type);
+            fd.append(ENTRY.newTime, newTime);
+            fd.append(ENTRY.deviceId, navigator.userAgent);
+
+            try {
+                await fetch(`https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`, { method: 'POST', mode: 'no-cors', body: fd });
+                store.set(lockKey, 1);
+                // Сразу показать отметку у себя, не дожидаясь публикации листа
+                const key = bus.route + '|' + bus.t;
+                reports.value = { ...reports.value, [key]: [...(reports.value[key] || []), { at: liveClock.value, issue: type, newTime: normTime(newTime) }] };
+                alert("Спасибо! Сообщение отправлено.");
+            } catch (e) {
+                console.error(e);
+                alert("Не получилось отправить. Попробуйте ещё раз.");
+            } finally { closeModal(); }
         };
 
-        const loginAdmin = () => { const pass = prompt("Пароль:"); if (pass === "admin2026") isAdminView.value = true; };
+        const shareSite = async () => {
+            const data = { title: 'КрасноBus', text: 'Расписание автобусов Красноармейского', url: location.href };
+            try {
+                if (navigator.share) await navigator.share(data);
+                else { await navigator.clipboard.writeText(location.href); alert('Ссылка скопирована'); }
+            } catch (e) {}
+        };
 
-        return { 
-            isAdminView, activeRouteIdx, direction, routes, currentRoute, todayDate, liveClock,
-            upcomingBuses, nextBus, groupedSchedule, selectedTime, suggestedTime, weather,
-            openAction, closeModal, submitReport, loginAdmin, contactAdmin
+        const contactAdmin = () => { window.location.href = `mailto:${ADMIN_EMAIL}?subject=Вопрос по КрасноBus`; };
+
+        return {
+            routes, loaded, dataStamp, dataWarning, activeRouteName, direction, showPast, selected, suggestedTime,
+            weather, currentRoute, liveClock, todayDate, nowMin, dirLabel, activeList, upcomingBuses, nextBus,
+            pastCount, groupedSchedule, currentNotes, currentPhones,
+            fmtDiff, routeTitle, openAction, closeModal, submitReport, reportsFor, shareSite, contactAdmin
         };
     }
 }).mount('#app');
