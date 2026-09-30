@@ -6,6 +6,10 @@
     <meta name="theme-color" content="#2563eb">
     <title>КрасноBus — Транспорт Чувашии</title>
     <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="КрасноBus">
     <!-- Версия Vue зафиксирована: @3 без версии может однажды «уехать» на несовместимую -->
     <script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,9 +40,17 @@
                     <h1 class="text-2xl font-black tracking-tighter leading-none uppercase">КРАСНО<span class="text-blue-600">Bus</span></h1>
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Чувашская Республика</p>
                 </div>
+                <div class="flex items-center gap-1">
+                <button v-if="contactGroups.length" @click="showContacts = true" class="flex items-center gap-1.5 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-100 text-xs font-black text-slate-600 hover:text-blue-600 transition" aria-label="Полезные контакты">
+                    <span>📇</span><span>Контакты</span>
+                </button>
                 <button @click="shareSite" class="p-2 text-slate-300 hover:text-blue-600 transition" aria-label="Поделиться">
                     <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v14"/></svg>
                 </button>
+                <button v-if="isApp" @click="exitApp" class="p-2 text-slate-300 hover:text-red-500 transition" aria-label="Выйти из приложения">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1011.4 0"/></svg>
+                </button>
+                </div>
             </div>
 
             <a href="https://yandex.ru/pogoda/krasnoarmeyskoye-chuvashia" target="_blank" rel="noopener" class="block bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100 active:scale-[0.98] transition">
@@ -46,7 +58,8 @@
                     <span class="text-2xl">{{ weather.icon }}</span>
                     <div>
                         <p class="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">с. Красноармейское</p>
-                        <p class="text-sm font-bold text-slate-700">{{ weather.temp }}°C, {{ weather.desc }}</p>
+                        <p class="text-sm font-bold text-slate-700">{{ weather.temp }}<template v-if="weather.temp !== '?'">°C</template>, {{ weather.desc }}</p>
+                        <p v-if="weather.stale" class="text-[9px] text-slate-400 leading-none mt-0.5">обновлено в {{ weather.at }}</p>
                     </div>
                 </div>
                 <div class="text-right border-l border-slate-100 pl-4">
@@ -59,6 +72,18 @@
         <!-- Предупреждение о сети/кэше -->
         <div v-if="dataWarning" class="px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl text-xs font-semibold text-amber-700">
             {{ dataWarning }}
+        </div>
+
+        <!-- УСТАНОВКА КАК ПРИЛОЖЕНИЕ -->
+        <div v-if="installHint" class="px-4 py-3 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-3">
+            <span class="text-2xl">📲</span>
+            <div class="flex-grow text-xs text-blue-800 leading-snug">
+                <template v-if="installHint === 'android'">Установите КрасноBus на телефон — будет открываться с иконки и работать без интернета.</template>
+                <template v-else-if="installHint === 'android-manual'">Установите КрасноBus на телефон: меню браузера <b>⋮</b> → «Установить приложение» или «Добавить на главный экран».</template>
+                <template v-else>Чтобы установить на iPhone: нажмите «Поделиться» внизу Safari → «На экран Домой».</template>
+            </div>
+            <button v-if="installHint === 'android'" @click="installApp" class="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold whitespace-nowrap">Установить</button>
+            <button @click="dismissInstall" class="text-blue-300 text-lg leading-none px-1" aria-label="Скрыть">×</button>
         </div>
 
         <!-- ВЫБОР МАРШРУТА -->
@@ -169,6 +194,34 @@
         </footer>
     </div>
 
+    <!-- ПОДСКАЗКА ВЫХОДА -->
+    <div v-if="exitHint" class="fixed left-4 right-4 bottom-6 z-[110] max-w-md mx-auto px-5 py-4 bg-slate-900 text-white rounded-2xl text-sm font-semibold shadow-2xl text-center">
+        Чтобы выйти, нажмите на телефоне «Назад» ◁ или «Домой» ○
+    </div>
+
+    <!-- КОНТАКТЫ -->
+    <div v-if="showContacts" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="showContacts = false">
+        <div class="w-full max-w-md mx-auto bg-white p-6 rounded-[2.5rem] space-y-5 shadow-2xl animate-in max-h-[85vh] overflow-y-auto">
+            <div class="text-center">
+                <div class="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-4"></div>
+                <h3 class="text-xl font-black">📇 Полезные контакты</h3>
+            </div>
+            <div v-for="g in contactGroups" :key="g.name" class="space-y-3">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ g.name }}</p>
+                <div v-for="c in g.items" :key="c.title" class="space-y-1 border-l-2 border-blue-100 pl-3">
+                    <p class="text-sm font-bold text-slate-700 leading-snug">{{ c.title }}</p>
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
+                        <a v-for="ph in c.phones" :key="ph" :href="'tel:' + ph.replace(/[^\d+]/g, '')" class="text-blue-600">📞 {{ ph }}</a>
+                        <a v-if="c.email" :href="'mailto:' + c.email" class="text-blue-600 break-all">✉️ {{ c.email }}</a>
+                        <a v-if="c.url" :href="c.url" target="_blank" rel="noopener" class="text-blue-600 break-all">🌐 {{ c.urlLabel }}</a>
+                    </div>
+                    <p v-if="c.note" class="text-[11px] text-slate-400 leading-snug">{{ c.note }}</p>
+                </div>
+            </div>
+            <button @click="showContacts = false" class="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">Закрыть</button>
+        </div>
+    </div>
+
     <!-- МОДАЛКА РЕЙСА -->
     <div v-if="selected" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="closeModal">
         <div class="w-full max-w-md mx-auto bg-white p-6 rounded-[2.5rem] space-y-5 shadow-2xl animate-in max-h-[90vh] overflow-y-auto">
@@ -187,6 +240,11 @@
                     {{ r.at }} — {{ r.issue || 'сообщение' }}<span v-if="r.newTime"> (новое время {{ r.newTime }})</span>
                 </p>
             </div>
+
+            <a v-if="selected.buy" :href="selected.buy" target="_blank" rel="noopener"
+               class="w-full p-4 bg-green-600 text-white rounded-2xl font-bold flex justify-between items-center active:scale-95 transition">
+                <span>Купить билет онлайн</span><span class="text-xl">🎫</span>
+            </a>
 
             <h3 class="text-xl font-black text-center">Что-то не так с рейсом?</h3>
 
@@ -236,6 +294,10 @@ const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikam
 // Пусто = функция отметок «!» на рейсах выключена. Как сделать — см. инструкцию.
 const REPORTS_CSV_URL = "";
 
+// Лист «Контакты» (A:Группа, B:Название, C:Телефон, D:Почта, E:Сайт, F:Примечание), опубликованный как CSV.
+// Пусто = блок «Полезные контакты» не показывается.
+const CONTACTS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHX8Ikamq_Ub--_Zx2RJZDeBs4Rra2WtrrD5piQ70qOmUI4o4QMQGDX7Kl8ugakAzh0MK1n6RAWTbA/pub?gid=1134112838&single=true&output=csv";
+
 const FORM_ID = "1FAIpQLSeIAw-Vjr2iiDPNuicCMv4w96SNS0ul4hD7_h8vuJMt9287EA";
 const ENTRY = {
     route:    "entry.155515134",
@@ -274,12 +336,12 @@ const normTime = (s) => {
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
 // Ячейка "06:30>07:40, 07:50" → [{t:'06:30', arr:'07:40'}, {t:'07:50'}]
-const parseTimes = (cell, no, route) => String(cell || '')
+const parseTimes = (cell, no, route, buy) => String(cell || '')
     .split(/[,;\n]/)
     .map(tok => {
         const [dep, arr] = tok.split('>');
         const t = normTime(dep);
-        return t ? { t, arr: normTime(arr), no, route, min: toMin(t) } : null;
+        return t ? { t, arr: normTime(arr), no, route, buy: buy || '', min: toMin(t) } : null;
     })
     .filter(Boolean)
     .sort((a, b) => a.min - b.min);
@@ -308,33 +370,84 @@ createApp({
         const selected = ref(null);
         const suggestedTime = ref('');
         const now = ref(new Date());
-        const weather = ref({ temp: '...', desc: 'Загрузка', icon: '⏳' });
+        const cachedWeather = store.get('kb:weather');
+        const weather = ref(cachedWeather ? { ...cachedWeather, stale: true } : { temp: '...', desc: 'Загрузка', icon: '⏳' });
         const reports = ref({}); // "маршрут|время" → [{at, issue, newTime}]
+        const contacts = ref(store.get('kb:contacts', []));
+        const showContacts = ref(false);
+        const exitHint = ref(false);
+        const isApp = ref(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
+
+        // Системная кнопка «Назад» сначала закрывает открытую панель (рейс/контакты), а не всё приложение
+        const anyModal = computed(() => !!selected.value || showContacts.value);
+        watch(anyModal, (open, was) => {
+            if (open && !was) history.pushState({ kbModal: 1 }, '');
+            else if (!open && was && history.state && history.state.kbModal) history.back();
+        });
+        window.addEventListener('popstate', () => { selected.value = null; showContacts.value = false; });
+
+        // Выход: браузер разрешает закрыть окно не везде. Если не закрылось — подсказка.
+        const exitApp = () => {
+            try { window.close(); } catch (e) {}
+            setTimeout(() => {
+                exitHint.value = true;
+                setTimeout(() => { exitHint.value = false; }, 3500);
+            }, 400);
+        };
+        const installHint = ref(null);   // 'android' | 'ios' | null
+        let deferredPrompt = null;
 
         watch(activeRouteName, v => { store.set('kb:route', v); showPast.value = false; });
         watch(direction, v => { store.set('kb:dir', v); showPast.value = false; });
 
-        /* ---------- Погода ---------- */
+        /* ---------- Погода ----------
+           Два источника: Open-Meteo, при сбое — wttr.in. Каждый запрос с таймаутом.
+           Последняя удачная погода сохраняется и показывается, если сейчас нет связи. */
+        const withTimeout = (url, ms = 8000) => {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), ms);
+            return fetch(url, { signal: ctrl.signal, cache: 'no-store' }).finally(() => clearTimeout(timer));
+        };
+        const describeWmo = (code) => {
+            if (code >= 95) return ["Гроза", "⚡"];
+            if (code >= 80) return ["Ливень", "🌦️"];
+            if (code >= 71 && code <= 77) return ["Снег", "❄️"];
+            if (code >= 51 && code <= 67) return ["Дождь", "🌧️"];
+            if (code >= 45 && code <= 48) return ["Туман", "🌫️"];
+            if (code > 0) return ["Переменная облачность", "⛅"];
+            return ["Ясно", "☀️"];
+        };
+        const fromOpenMeteo = async () => {
+            const r = await withTimeout("https://api.open-meteo.com/v1/forecast?latitude=55.76&longitude=47.17&current_weather=true&timezone=Europe%2FMoscow");
+            if (!r.ok) throw new Error('open-meteo ' + r.status);
+            const cw = (await r.json()).current_weather;
+            const [desc, icon] = describeWmo(cw.weathercode);
+            return { temp: Math.round(cw.temperature), desc, icon };
+        };
+        const fromWttr = async () => {
+            const r = await withTimeout("https://wttr.in/55.76,47.17?format=j1&lang=ru");
+            if (!r.ok) throw new Error('wttr ' + r.status);
+            const cc = (await r.json()).current_condition[0];
+            const desc = (cc.lang_ru && cc.lang_ru[0] && cc.lang_ru[0].value) || (cc.weatherDesc && cc.weatherDesc[0].value) || '';
+            return { temp: Number(cc.temp_C), desc: desc.charAt(0).toUpperCase() + desc.slice(1), icon: "🌡️" };
+        };
         const fetchWeather = async () => {
-            try {
-                const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=55.76&longitude=47.17&current_weather=true&timezone=Europe%2FMoscow");
-                const data = await r.json();
-                const temp = Math.round(data.current_weather.temperature);
-                const code = data.current_weather.weathercode;
-                let desc = "Ясно", icon = "☀️";
-                if (code > 0 && code <= 3) { desc = "Переменная облачность"; icon = "⛅"; }
-                if (code >= 45 && code <= 48) { desc = "Туман"; icon = "🌫️"; }
-                if (code >= 51 && code <= 67) { desc = "Дождь"; icon = "🌧️"; }
-                if (code >= 71 && code <= 77) { desc = "Снег"; icon = "❄️"; }
-                if (code >= 80 && code <= 82) { desc = "Ливень"; icon = "🌦️"; }
-                if (code >= 95) { desc = "Гроза"; icon = "⚡"; }
-                weather.value = { temp, desc, icon };
-            } catch (e) { weather.value = { temp: '?', desc: 'Нет данных', icon: '📡' }; }
+            for (const source of [fromOpenMeteo, fromWttr]) {
+                try {
+                    const w = await source();
+                    const at = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                    weather.value = { ...w, at, stale: false };
+                    store.set('kb:weather', weather.value);
+                    return;
+                } catch (e) { console.warn('Погода:', e); }
+            }
+            const cached = store.get('kb:weather');
+            weather.value = cached ? { ...cached, stale: true } : { temp: '?', desc: 'Погода недоступна', icon: '📡' };
         };
 
         /* ---------- Расписание ---------- */
         // Колонки листа: A Название | B Туда-метка | C Назад-метка | D Туда | E Назад
-        //                | F Номер (необяз.) | G Примечание (необяз.) | H Телефон (необяз.)
+        //                | F Номер | G Примечание | H Телефон | I Билеты туда (ссылка) | J Билеты назад (ссылка) — всё необязательно
         const buildRoutes = (csv) => {
             const list = parseCSV(csv).slice(1).map(c => {
                 const name = (c[0] || '').trim();
@@ -342,12 +455,14 @@ createApp({
                 const no = (c[5] || '').trim();
                 const note = (c[6] || '').trim();
                 const phone = (c[7] || '').trim();
+                const isUrl = v => /^https?:\/\//i.test(v);
+                const buyTo = (c[8] || '').trim(), buyBack = (c[9] || '').trim();
                 return {
                     name, no,
                     toLabel: (c[1] || '').trim() || "В ЧЕБОКСАРЫ",
                     backLabel: (c[2] || '').trim() || "В КРАСНОАРМЕЙСКОЕ",
-                    to: parseTimes(c[3], no, name),
-                    back: parseTimes(c[4], no, name),
+                    to: parseTimes(c[3], no, name, isUrl(buyTo) ? buyTo : ''),
+                    back: parseTimes(c[4], no, name, isUrl(buyBack) ? buyBack : ''),
                     notes: note ? [{ no: '', text: note }] : [],
                     phones: phone ? [{ no, phone }] : []
                 };
@@ -381,7 +496,9 @@ createApp({
             return true;
         };
 
+        let lastSheetLoad = 0;
         const loadFromSheets = async () => {
+            lastSheetLoad = Date.now();
             const cached = store.get('kb:csv');
             if (cached && applyCsv(cached.csv)) dataStamp.value = cached.at;
             try {
@@ -423,15 +540,85 @@ createApp({
         };
         const reportsFor = (bus) => bus ? (reports.value[bus.route + '|' + bus.t] || []) : [];
 
+        /* ---------- Контакты ---------- */
+        const loadContacts = async () => {
+            if (!CONTACTS_CSV_URL) return;
+            try {
+                const r = await fetch(CONTACTS_CSV_URL, { cache: 'no-store' });
+                if (!r.ok) throw new Error(r.status);
+                const list = parseCSV(await r.text()).slice(1).map(c => {
+                    const title = (c[1] || '').trim();
+                    if (!title) return null;
+                    const url = (c[4] || '').trim();
+                    return {
+                        group: (c[0] || '').trim() || 'Прочее', title,
+                        phones: (c[2] || '').split(/[;\n]/).map(x => x.trim()).filter(Boolean),
+                        email: (c[3] || '').trim(),
+                        url: /^https?:\/\//i.test(url) ? url : '',
+                        urlLabel: url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''),
+                        note: (c[5] || '').trim()
+                    };
+                }).filter(Boolean);
+                contacts.value = list;
+                store.set('kb:contacts', list);
+            } catch (e) { console.error('Контакты:', e); }
+        };
+        const contactGroups = computed(() => {
+            const groups = [];
+            contacts.value.forEach(c => {
+                let g = groups.find(x => x.name === c.group);
+                if (!g) groups.push(g = { name: c.group, items: [] });
+                g.items.push(c);
+            });
+            return groups;
+        });
+
+        /* ---------- Установка как приложение (PWA) ---------- */
+        const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const setupInstall = () => {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
+            }
+            // Запущено как установленное приложение → запоминаем (на Android память общая с Chrome)
+            if (isStandalone()) { store.set('kb:installed', 1); return; }
+            if (store.get('kb:installed') || store.get('kb:installDismissed')) return;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault(); deferredPrompt = e; installHint.value = 'android';
+            });
+            const ua = navigator.userAgent;
+            const isIOS = /iPhone|iPad|iPod/i.test(ua) && !window.MSStream;
+            if (isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|YaBrowser/i.test(ua)) installHint.value = 'ios';
+            // Android-браузеры без автоматической кнопки (Firefox, Яндекс Браузер и др.) — подсказка через меню
+            // Chrome / Samsung / Edge сами сообщают, можно ли установить (и молчат, если уже установлено).
+            // Ручную подсказку показываем только браузерам без такой кнопки: Яндекс, Firefox, Opera.
+            const noNativePrompt = /YaBrowser|Firefox|OPR|Opera/i.test(ua);
+            if (/Android/i.test(ua) && noNativePrompt) {
+                setTimeout(() => { if (!deferredPrompt && !installHint.value) installHint.value = 'android-manual'; }, 5000);
+            }
+        };
+        const installApp = async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            try { await deferredPrompt.userChoice; } catch (e) {}
+            deferredPrompt = null; installHint.value = null;
+        };
+        const dismissInstall = () => { installHint.value = null; store.set('kb:installDismissed', 1); };
+        window.addEventListener('appinstalled', () => { installHint.value = null; store.set('kb:installed', 1); });
+
         onMounted(() => {
-            loadFromSheets(); fetchWeather(); loadReports();
+            loadFromSheets(); fetchWeather(); loadReports(); loadContacts(); setupInstall();
             setInterval(() => { now.value = new Date(); }, 15000);
             setInterval(loadReports, 120000);
             setInterval(fetchWeather, 900000);
             // Вернулись в приложение после сна телефона — сразу обновить время
+            // Установленное приложение может неделями «висеть» в памяти телефона без перезапуска.
+            // Поэтому при каждом возвращении в него (если прошло >10 мин) заново берём расписание из таблицы.
             document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) { now.value = new Date(); loadReports(); }
+                if (document.hidden) return;
+                now.value = new Date(); loadReports();
+                if (Date.now() - lastSheetLoad > 10 * 60 * 1000) { loadFromSheets(); loadContacts(); fetchWeather(); }
             });
+            setInterval(() => { if (!document.hidden) { loadFromSheets(); loadContacts(); } }, 30 * 60 * 1000);
         });
 
         /* ---------- Вычисляемые ---------- */
@@ -517,6 +704,7 @@ createApp({
             routes, loaded, dataStamp, dataWarning, activeRouteName, direction, showPast, selected, suggestedTime,
             weather, currentRoute, liveClock, todayDate, nowMin, dirLabel, activeList, upcomingBuses, nextBus,
             pastCount, groupedSchedule, currentNotes, currentPhones,
+            contactGroups, showContacts, installHint, isApp, exitApp, exitHint, installApp, dismissInstall,
             fmtDiff, routeTitle, openAction, closeModal, submitReport, reportsFor, shareSite, contactAdmin
         };
     }
