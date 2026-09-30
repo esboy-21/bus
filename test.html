@@ -40,9 +40,14 @@
                     <h1 class="text-2xl font-black tracking-tighter leading-none uppercase">КРАСНО<span class="text-blue-600">Bus</span></h1>
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Чувашская Республика</p>
                 </div>
+                <div class="flex items-center gap-1">
+                <button v-if="contactGroups.length" @click="showContacts = true" class="flex items-center gap-1.5 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-100 text-xs font-black text-slate-600 hover:text-blue-600 transition" aria-label="Полезные контакты">
+                    <span>📇</span><span>Контакты</span>
+                </button>
                 <button @click="shareSite" class="p-2 text-slate-300 hover:text-blue-600 transition" aria-label="Поделиться">
                     <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v14"/></svg>
                 </button>
+                </div>
             </div>
 
             <a href="https://yandex.ru/pogoda/krasnoarmeyskoye-chuvashia" target="_blank" rel="noopener" class="block bg-white rounded-3xl p-4 flex justify-between items-center shadow-sm border border-slate-100 active:scale-[0.98] transition">
@@ -178,29 +183,38 @@
                class="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-full text-xs font-black shadow-sm border border-slate-100 active:scale-95 transition">
                 📞 Перевозчик<span v-if="p.no"> №{{ p.no }}</span>: {{ p.phone }}
             </a>
-            <details v-if="contactGroups.length" class="w-full text-left bg-white rounded-3xl border border-slate-100 shadow-sm">
-                <summary class="px-5 py-4 font-black text-sm cursor-pointer select-none">📇 Полезные контакты</summary>
-                <div class="px-5 pb-5 space-y-5">
-                    <div v-for="g in contactGroups" :key="g.name" class="space-y-3">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ g.name }}</p>
-                        <div v-for="c in g.items" :key="c.title" class="space-y-1 border-l-2 border-blue-100 pl-3">
-                            <p class="text-sm font-bold text-slate-700 leading-snug">{{ c.title }}</p>
-                            <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
-                                <a v-for="ph in c.phones" :key="ph" :href="'tel:' + ph.replace(/[^\d+]/g, '')" class="text-blue-600">📞 {{ ph }}</a>
-                                <a v-if="c.email" :href="'mailto:' + c.email" class="text-blue-600 break-all">✉️ {{ c.email }}</a>
-                                <a v-if="c.url" :href="c.url" target="_blank" rel="noopener" class="text-blue-600 break-all">🌐 {{ c.urlLabel }}</a>
-                            </div>
-                            <p v-if="c.note" class="text-[11px] text-slate-400 leading-snug">{{ c.note }}</p>
-                        </div>
-                    </div>
-                </div>
-            </details>
+            <button v-if="contactGroups.length" @click="showContacts = true" class="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-full text-xs font-black shadow-sm border border-slate-100 active:scale-95 transition">
+                📇 Полезные контакты
+            </button>
             <button @click="contactAdmin" class="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-full text-xs font-black shadow-xl active:scale-95 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                 Написать администратору
             </button>
             <p v-if="dataStamp" class="text-[10px] text-slate-300 font-semibold">Расписание загружено {{ dataStamp }}</p>
         </footer>
+    </div>
+
+    <!-- КОНТАКТЫ -->
+    <div v-if="showContacts" class="fixed inset-0 z-[100] flex items-end p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="showContacts = false">
+        <div class="w-full max-w-md mx-auto bg-white p-6 rounded-[2.5rem] space-y-5 shadow-2xl animate-in max-h-[85vh] overflow-y-auto">
+            <div class="text-center">
+                <div class="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-4"></div>
+                <h3 class="text-xl font-black">📇 Полезные контакты</h3>
+            </div>
+            <div v-for="g in contactGroups" :key="g.name" class="space-y-3">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ g.name }}</p>
+                <div v-for="c in g.items" :key="c.title" class="space-y-1 border-l-2 border-blue-100 pl-3">
+                    <p class="text-sm font-bold text-slate-700 leading-snug">{{ c.title }}</p>
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
+                        <a v-for="ph in c.phones" :key="ph" :href="'tel:' + ph.replace(/[^\d+]/g, '')" class="text-blue-600">📞 {{ ph }}</a>
+                        <a v-if="c.email" :href="'mailto:' + c.email" class="text-blue-600 break-all">✉️ {{ c.email }}</a>
+                        <a v-if="c.url" :href="c.url" target="_blank" rel="noopener" class="text-blue-600 break-all">🌐 {{ c.urlLabel }}</a>
+                    </div>
+                    <p v-if="c.note" class="text-[11px] text-slate-400 leading-snug">{{ c.note }}</p>
+                </div>
+            </div>
+            <button @click="showContacts = false" class="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">Закрыть</button>
+        </div>
     </div>
 
     <!-- МОДАЛКА РЕЙСА -->
@@ -355,6 +369,7 @@ createApp({
         const weather = ref(cachedWeather ? { ...cachedWeather, stale: true } : { temp: '...', desc: 'Загрузка', icon: '⏳' });
         const reports = ref({}); // "маршрут|время" → [{at, issue, newTime}]
         const contacts = ref(store.get('kb:contacts', []));
+        const showContacts = ref(false);
         const installHint = ref(null);   // 'android' | 'ios' | null
         let deferredPrompt = null;
 
@@ -660,7 +675,7 @@ createApp({
             routes, loaded, dataStamp, dataWarning, activeRouteName, direction, showPast, selected, suggestedTime,
             weather, currentRoute, liveClock, todayDate, nowMin, dirLabel, activeList, upcomingBuses, nextBus,
             pastCount, groupedSchedule, currentNotes, currentPhones,
-            contactGroups, installHint, installApp, dismissInstall,
+            contactGroups, showContacts, installHint, installApp, dismissInstall,
             fmtDiff, routeTitle, openAction, closeModal, submitReport, reportsFor, shareSite, contactAdmin
         };
     }
