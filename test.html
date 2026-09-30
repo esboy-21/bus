@@ -47,6 +47,9 @@
                 <button @click="shareSite" class="p-2 text-slate-300 hover:text-blue-600 transition" aria-label="Поделиться">
                     <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v14"/></svg>
                 </button>
+                <button v-if="isApp" @click="exitApp" class="p-2 text-slate-300 hover:text-red-500 transition" aria-label="Выйти из приложения">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1011.4 0"/></svg>
+                </button>
                 </div>
             </div>
 
@@ -183,15 +186,17 @@
                class="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-full text-xs font-black shadow-sm border border-slate-100 active:scale-95 transition">
                 📞 Перевозчик<span v-if="p.no"> №{{ p.no }}</span>: {{ p.phone }}
             </a>
-            <button v-if="contactGroups.length" @click="showContacts = true" class="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-full text-xs font-black shadow-sm border border-slate-100 active:scale-95 transition">
-                📇 Полезные контакты
-            </button>
             <button @click="contactAdmin" class="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-full text-xs font-black shadow-xl active:scale-95 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                 Написать администратору
             </button>
             <p v-if="dataStamp" class="text-[10px] text-slate-300 font-semibold">Расписание загружено {{ dataStamp }}</p>
         </footer>
+    </div>
+
+    <!-- ПОДСКАЗКА ВЫХОДА -->
+    <div v-if="exitHint" class="fixed left-4 right-4 bottom-6 z-[110] max-w-md mx-auto px-5 py-4 bg-slate-900 text-white rounded-2xl text-sm font-semibold shadow-2xl text-center">
+        Чтобы выйти, нажмите на телефоне «Назад» ◁ или «Домой» ○
     </div>
 
     <!-- КОНТАКТЫ -->
@@ -370,6 +375,25 @@ createApp({
         const reports = ref({}); // "маршрут|время" → [{at, issue, newTime}]
         const contacts = ref(store.get('kb:contacts', []));
         const showContacts = ref(false);
+        const exitHint = ref(false);
+        const isApp = ref(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
+
+        // Системная кнопка «Назад» сначала закрывает открытую панель (рейс/контакты), а не всё приложение
+        const anyModal = computed(() => !!selected.value || showContacts.value);
+        watch(anyModal, (open, was) => {
+            if (open && !was) history.pushState({ kbModal: 1 }, '');
+            else if (!open && was && history.state && history.state.kbModal) history.back();
+        });
+        window.addEventListener('popstate', () => { selected.value = null; showContacts.value = false; });
+
+        // Выход: браузер разрешает закрыть окно не везде. Если не закрылось — подсказка.
+        const exitApp = () => {
+            try { window.close(); } catch (e) {}
+            setTimeout(() => {
+                exitHint.value = true;
+                setTimeout(() => { exitHint.value = false; }, 3500);
+            }, 400);
+        };
         const installHint = ref(null);   // 'android' | 'ios' | null
         let deferredPrompt = null;
 
@@ -555,7 +579,9 @@ createApp({
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
             }
-            if (isStandalone() || store.get('kb:installDismissed')) return;
+            // Запущено как установленное приложение → запоминаем (на Android память общая с Chrome)
+            if (isStandalone()) { store.set('kb:installed', 1); return; }
+            if (store.get('kb:installed') || store.get('kb:installDismissed')) return;
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault(); deferredPrompt = e; installHint.value = 'android';
             });
@@ -563,7 +589,10 @@ createApp({
             const isIOS = /iPhone|iPad|iPod/i.test(ua) && !window.MSStream;
             if (isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|YaBrowser/i.test(ua)) installHint.value = 'ios';
             // Android-браузеры без автоматической кнопки (Firefox, Яндекс Браузер и др.) — подсказка через меню
-            if (/Android/i.test(ua)) {
+            // Chrome / Samsung / Edge сами сообщают, можно ли установить (и молчат, если уже установлено).
+            // Ручную подсказку показываем только браузерам без такой кнопки: Яндекс, Firefox, Opera.
+            const noNativePrompt = /YaBrowser|Firefox|OPR|Opera/i.test(ua);
+            if (/Android/i.test(ua) && noNativePrompt) {
                 setTimeout(() => { if (!deferredPrompt && !installHint.value) installHint.value = 'android-manual'; }, 5000);
             }
         };
@@ -574,7 +603,7 @@ createApp({
             deferredPrompt = null; installHint.value = null;
         };
         const dismissInstall = () => { installHint.value = null; store.set('kb:installDismissed', 1); };
-        window.addEventListener('appinstalled', () => { installHint.value = null; });
+        window.addEventListener('appinstalled', () => { installHint.value = null; store.set('kb:installed', 1); });
 
         onMounted(() => {
             loadFromSheets(); fetchWeather(); loadReports(); loadContacts(); setupInstall();
@@ -675,7 +704,7 @@ createApp({
             routes, loaded, dataStamp, dataWarning, activeRouteName, direction, showPast, selected, suggestedTime,
             weather, currentRoute, liveClock, todayDate, nowMin, dirLabel, activeList, upcomingBuses, nextBus,
             pastCount, groupedSchedule, currentNotes, currentPhones,
-            contactGroups, showContacts, installHint, installApp, dismissInstall,
+            contactGroups, showContacts, installHint, isApp, exitApp, exitHint, installApp, dismissInstall,
             fmtDiff, routeTitle, openAction, closeModal, submitReport, reportsFor, shareSite, contactAdmin
         };
     }
