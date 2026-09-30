@@ -581,16 +581,24 @@ createApp({
             }
             // Запущено как установленное приложение → запоминаем (на Android память общая с Chrome)
             if (isStandalone()) { store.set('kb:installed', 1); return; }
-            if (store.get('kb:installed') || store.get('kb:installDismissed')) return;
+
+            // «×» скрывает плашку на 14 дней (а не навсегда — вдруг нажали случайно)
+            const dismissedAt = Number(store.get('kb:installDismissed')) || 0;
+            const dismissed = dismissedAt > 1 && Date.now() - dismissedAt < 14 * 24 * 3600 * 1000;
+
+            // Chrome/Samsung/Edge присылают это событие ТОЛЬКО если приложение сейчас НЕ установлено.
+            // Поэтому ему верим больше, чем своей отметке: если событие пришло — значит, приложение удалили.
             window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault(); deferredPrompt = e; installHint.value = 'android';
+                e.preventDefault(); deferredPrompt = e;
+                store.set('kb:installed', 0);
+                if (!dismissed) installHint.value = 'android';
             });
+
+            // Ручные подсказки (iPhone, Яндекс, Firefox) — только если не устанавливали и не скрывали
+            if (store.get('kb:installed') || dismissed) return;
             const ua = navigator.userAgent;
             const isIOS = /iPhone|iPad|iPod/i.test(ua) && !window.MSStream;
             if (isIOS && /Safari/i.test(ua) && !/CriOS|FxiOS|YaBrowser/i.test(ua)) installHint.value = 'ios';
-            // Android-браузеры без автоматической кнопки (Firefox, Яндекс Браузер и др.) — подсказка через меню
-            // Chrome / Samsung / Edge сами сообщают, можно ли установить (и молчат, если уже установлено).
-            // Ручную подсказку показываем только браузерам без такой кнопки: Яндекс, Firefox, Opera.
             const noNativePrompt = /YaBrowser|Firefox|OPR|Opera/i.test(ua);
             if (/Android/i.test(ua) && noNativePrompt) {
                 setTimeout(() => { if (!deferredPrompt && !installHint.value) installHint.value = 'android-manual'; }, 5000);
@@ -602,7 +610,7 @@ createApp({
             try { await deferredPrompt.userChoice; } catch (e) {}
             deferredPrompt = null; installHint.value = null;
         };
-        const dismissInstall = () => { installHint.value = null; store.set('kb:installDismissed', 1); };
+        const dismissInstall = () => { installHint.value = null; store.set('kb:installDismissed', Date.now()); };
         window.addEventListener('appinstalled', () => { installHint.value = null; store.set('kb:installed', 1); });
 
         onMounted(() => {
